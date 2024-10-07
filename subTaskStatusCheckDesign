@@ -1,0 +1,54 @@
+package Bayram
+
+import com.atlassian.jira.user.ApplicationUser
+import com.atlassian.jira.bc.issue.IssueService
+import com.atlassian.jira.issue.IssueInputParametersImpl
+import com.atlassian.jira.component.ComponentAccessor
+
+ApplicationUser user = ComponentAccessor.getUserManager().getUserByName("jirabot")
+def actionId = 41
+def subTaskManager = ComponentAccessor.getSubTaskManager()
+def issueManager = ComponentAccessor.getIssueManager()
+//def issue = issueManager.getIssueByCurrentKey("SCRUM-226")
+def parentIssue = issue.getParentObject()
+def issueInputParameters = new IssueInputParametersImpl()
+IssueService issueService = ComponentAccessor.getIssueService()
+def issuetype = parentIssue.issueTypeId
+
+if (parentIssue == null) {
+    log.error("Parent issue not found.")
+    return false
+}
+
+def subTasks = subTaskManager.getSubTaskObjects(parentIssue)
+def subTaskTypes = ["Design sub-task"]
+def allPositive = true
+
+subTasks.each { subTask ->
+    if (subTaskTypes.contains(subTask.issueType.name)) {
+        def taskStatusName = subTask.getStatus().name
+        def statusCategory = subTask.getStatus().getStatusCategory().id
+        log.warn("Task: ${subTask.key}, Type: ${subTask.issueType.name}, Status Category ID: ${statusCategory}, Status Name: ${taskStatusName}")
+        if (statusCategory != 3) {
+            allPositive = false
+        }
+    }
+}
+// задержка в 3 секунды
+Thread.sleep(3000)
+
+
+if (allPositive && issuetype == "10100") {
+    def transitionValidationResult = issueService.validateTransition(user, parentIssue.id, actionId, issueInputParameters)
+    if (transitionValidationResult.isValid()) {
+        def transitionResult = issueService.transition(user, transitionValidationResult)
+        if (transitionResult.isValid()) {
+            log.warn("Parent issue transitioned to Design")
+        } else {
+            log.error("Failed to transition parent issue to Design: " + transitionResult.errorCollection)
+        }
+    } else {
+        log.error("Validation failed: " + transitionValidationResult.errorCollection)
+    }
+}
+return allPositive
