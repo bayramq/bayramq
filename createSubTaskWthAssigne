@@ -1,0 +1,110 @@
+import com.atlassian.jira.user.ApplicationUser
+import com.atlassian.jira.component.ComponentAccessor
+import com.atlassian.jira.user.util.UserUtil
+import java.util.Random
+
+def issueManager = ComponentAccessor.getIssueManager()
+def issueTypeManager = ComponentAccessor.getConstantsManager()
+def groupManager = ComponentAccessor.getGroupManager()
+def userUtil = ComponentAccessor.getUserUtil()
+//def issue = issueManager.getIssueByCurrentKey("SCRUM-330")
+
+// Получаем ключ проекта
+def projectKey = issue.projectObject.key
+
+// Сопоставление ключа проекта и группы (на основе вашего файла)
+def projectGroupMapping = [
+    "BOPT": "jira-team-digital-service-design",
+    "ODIN": "jira-team-digital-service-design",
+    "TEL": "jira-team-digital-service-design",
+    "DO": "jira-team-digital-service-design",
+    "BOE": "jira-team-digital-service-design",
+    "PC": "jira-team-loan-products",
+    "AC": "jira-team-loan-products",
+    "ACT": "jira-team-loan-products",
+    "XSEL": "jira-team-loan-products",
+    "BDCE": "jira-team-loan-products",
+    "CC": "jira-team-loan-products",
+    "AD": "jira-team-loan-products",
+    "CCE": "jira-team-loan-products",
+    "IPO": "jira-team-innovative-products",
+    "AN": "jira-team-innovative-products",
+    "VAS": "jira-team-innovative-products",
+    "UMCO": "jira-team-innovative-products",
+    "INV": "jira-team-innovative-products",
+    "PER": "jira-team-CVM",
+    "EL": "jira-team-CVM",
+    "CHM": "jira-team-CVM",
+    "CM": "jira-team-CVM",
+    "GAM": "jira-team-CVM",
+    "ARL": "jira-team-CVM",
+    "PFM": "jira-team-CVM",
+    "LOY": "jira-team-CVM",
+    "IP": "jira-team-CVM",
+    "BP": "jira-team-payments",
+    "TG": "jira-team-payments",
+    "CRDM": "jira-team-payments",
+    "CDJ": "jira-team-payments",
+    "MIC": "jira-team-micro-products",
+    "EJ": "jira-team-micro-products",
+    "NON": "jira-team-micro-products",
+    "MS": "jira-team-micro-products",
+    "CS": "jira-team-micro-products",
+    "SCTS": "jira-team-sme",
+    "LEN": "jira-team-sme",
+    "SMEC": "jira-team-sme",
+    "LL": "jira-team-sme",
+    "DC": "jira-team-sme",
+    "OC": "jira-team-sme",
+    "BCS": "jira-team-sme",
+    "BBC": "jira-team-sme",
+    "EE": "jira-team-Enterprice-services-KB-user",
+    "ELDF": "jira-team-Enterprice-services-KB-user",
+    "KBUS": "jira-team-Enterprice-services-KB-user",
+    "SCRUM": "jira-administrators"
+]
+
+
+
+if (projectGroupMapping.containsKey(projectKey)) {
+    def groupName = projectGroupMapping[projectKey]
+    def group = groupManager.getGroup(groupName)
+
+
+
+List<ApplicationUser> members = groupManager.getUsersInGroup(group) as List<ApplicationUser> // get list of users from attribute
+members.shuffle() // Randomise list of user
+ApplicationUser usersInGroup = members.first() // get first user after randomise
+
+    
+    
+        // Проверка наличия задачи Design review
+        def parentLink = ComponentAccessor.getIssueLinkManager().getOutwardLinks(issue.id)
+        def needIssue = []
+        def designSubtask = []
+        parentLink.each {
+            if (it.destinationObject.issueType.name == "Design review") {
+                needIssue.add(it.destinationObject)
+            }
+        
+        }
+        parentLink.each{
+            if (it.destinationObject.issueType.name == "Design sub-task"){
+                designSubtask.add(it.destinationObject)
+            }
+        }
+
+        
+
+        String summary = issue.summary
+        if (designSubtask.size() > 0 && (issue.issueType.name == "Story" && needIssue.size() == 0) || (issue.issueType.name == "Feature" && needIssue.size() == 0)) {
+            issue.createSubTask("Design review") {
+                setSummary(summary)
+                setAssignee(usersInGroup)
+            }
+    } else {
+        log.warn("No users found in the group: ${groupName}")
+    }
+} else {
+    log.warn("No group mapping found for project key: ${projectKey}")
+}
