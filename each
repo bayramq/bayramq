@@ -1,0 +1,62 @@
+import com.atlassian.jira.user.ApplicationUser
+import com.atlassian.jira.component.ComponentAccessor
+import com.atlassian.jira.event.type.EventDispatchOption
+
+def issueLinkManager = ComponentAccessor.getIssueLinkManager()
+def customFieldManager = ComponentAccessor.getCustomFieldManager()
+def issueManager = ComponentAccessor.getIssueManager()
+def commentManager = ComponentAccessor.getCommentManager()
+ApplicationUser user = ComponentAccessor.getUserManager().getUserByName("jirabot")
+//def issue = issueManager.getIssueByCurrentKey("HELP-12641")
+
+def userEmailField = customFieldManager.getCustomFieldObject(10333)
+def userEmailValue = issue.getCustomFieldValue(userEmailField)
+
+def parentLink = issueLinkManager.getOutwardLinks(issue.id)
+def needKey = []
+parentLink.each {
+    if (it.destinationObject.issueType.name == "*Onboarding Workspace") {
+        needKey.add(it.destinationObject)
+    }
+}
+
+def linked = []
+def onboard = []
+needKey.each { 
+    linked = issueLinkManager.getInwardLinks(it.id)
+    linked.each {
+        if (it.sourceObject.issueType.name == "Onboarding") {
+            onboard.add(it.sourceObject)
+        }
+    }
+}
+
+def paper = null
+def linkedPaper = []
+
+onboard.each { issue ->
+    linkedPaper = issueLinkManager.getOutwardLinks(issue.id)
+    linkedPaper.each { link ->
+        def destinationIssue = link.destinationObject
+        def hasOnboardingComponent = destinationIssue.components.any { it.name == "Onboarding" }
+
+        if (destinationIssue.issueType.name == "*Onboarding Paperwork" && hasOnboardingComponent) {
+            paper = destinationIssue
+        }
+    }
+}
+
+
+if (paper) {
+    def commentBody = "Рабочая почта сотрудника: " + userEmailValue
+    def existingComments = commentManager.getComments(paper).findAll { it.body == commentBody }
+    if (existingComments.isEmpty()) {
+        paper.setCustomFieldValue(userEmailField, userEmailValue)
+        commentManager.create(paper, user, commentBody, true)
+        ComponentAccessor.issueManager.updateIssue(user, paper, EventDispatchOption.DO_NOT_DISPATCH, false)
+    } else {
+        log.debug("Комментарий уже добавлен.")
+    }
+} else {
+    log.debug("Не удалось найти задачу *Onboarding Paperwork.")
+}
