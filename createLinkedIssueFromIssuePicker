@@ -1,0 +1,33 @@
+package AgileWorkflow
+
+import com.atlassian.jira.component.ComponentAccessor
+import com.atlassian.jira.issue.link.IssueLinkManager
+import com.atlassian.jira.issue.Issue
+
+def issueManager = ComponentAccessor.getIssueManager()
+def issueLinkManager = ComponentAccessor.getIssueLinkManager()
+def issueLinkTypeManager = ComponentAccessor.getComponent(com.atlassian.jira.issue.link.IssueLinkTypeManager)
+def issue = issueManager.getIssueByCurrentKey("RPT-10")
+
+def issuePicker = ComponentAccessor.getCustomFieldManager().getCustomFieldObjectByName("Issue Picker")
+def pickerValue = issuePicker.getValue(issue) 
+def actor = ComponentAccessor.getUserManager().getUserByName("jirabot")
+
+def linkTypeName = "Blocks"
+
+def issueLinkType = issueLinkTypeManager.issueLinkTypes.find { it.name == linkTypeName }
+
+// Проходим по каждому ключу задачи
+pickerValue.each { 
+    
+       def linkedIssueKey = it.toString()
+       def linkedIssue = issueManager.getIssueByCurrentKey(linkedIssueKey)
+
+    // Проверяем, существует ли задача
+    if (linkedIssue) {
+        // Создаем ссылку между текущей задачей и задачей из списка
+        issueLinkManager.createIssueLink(issue.id, linkedIssue.id, issueLinkType.id, null, actor)
+    } else {
+        log.warn("Задача ${it} не найдена")
+    }
+}
