@@ -1,0 +1,35 @@
+import com.atlassian.jira.component.ComponentAccessor
+import com.atlassian.jira.event.type.EventDispatchOption
+import com.atlassian.jira.user.ApplicationUser
+
+
+Class objectFacadeClass = ComponentAccessor.getPluginAccessor().getClassLoader().findClass("com.riadalabs.jira.plugins.insight.channel.external.api.facade.ObjectFacade")
+
+
+def objectFacade = ComponentAccessor.getOSGiComponentInstanceOfType(objectFacadeClass)
+def cfManager = ComponentAccessor.getCustomFieldManager()
+def groupManager = ComponentAccessor.getGroupManager()
+def issueManager = ComponentAccessor.getIssueManager()
+
+def issue = issueManager.getIssueByCurrentKey("BR-3609993")
+def user = ComponentAccessor.getUserManager().getUserByName("jirabot") // Actor
+def crt = cfManager.getCustomFieldObject(10202).getValue(issue) // Request Type
+def kbdd = cfManager.getCustomFieldObject(16800) // KBDD-apply type
+def myValue = kbdd.getValue(issue)
+def myObjectBean = myValue[0] // Object
+def myAttrValue = objectFacade.loadObjectAttributeBean(myObjectBean.getId(), 3789).getObjectAttributeValueBeans()[0] // Attribute Value
+def myString = myAttrValue.getValue()
+def crtValue = ["br/5c071317-d1b4-424b-ab60-2fc991240a3a","br/1235eb57-f4cc-408c-808f-2ac96e4af648"] // CRT Value
+
+
+
+
+List<ApplicationUser> members = groupManager.getUsersInGroup(myString) as List<ApplicationUser> // get list of users from attribute
+members.shuffle() // Randomise list of user
+ApplicationUser selectedUser = members.first() // get first user after randomise
+
+
+if (crtValue.any{crt?.toString().contains(it)} || crt.toString().isEmpty()){ // Check issue Request Type
+issue.setAssignee(selectedUser)
+issueManager.updateIssue(user, issue, EventDispatchOption.ISSUE_UPDATED, false)
+}
