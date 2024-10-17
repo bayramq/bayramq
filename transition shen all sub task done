@@ -1,0 +1,69 @@
+import com.atlassian.jira.bc.issue.IssueService
+import com.atlassian.jira.issue.IssueInputParametersImpl
+import com.atlassian.jira.user.ApplicationUser
+import com.opensymphony.workflow.InvalidInputException
+import com.atlassian.jira.component.ComponentAccessor
+import com.atlassian.jira.issue.link.IssueLinkManager
+import com.atlassian.jira.issue.Issue
+
+def issueManager = ComponentAccessor.getIssueManager()
+def issueLinkManager = ComponentAccessor.getIssueLinkManager()
+
+def builtIssue = issueManager.getIssueByCurrentKey("RPT-16") 
+def user = ComponentAccessor.getUserManager().getUserByName("jirabot")
+
+if (builtIssue == null) {
+    throw new IllegalArgumentException("Issue with the provided key not found.")
+}
+
+boolean allSubTasksReleased = true
+
+// Проверяем исходящие линки
+issueLinkManager.getOutwardLinks(builtIssue.id).each { link ->
+    def linkedIssue = link.destinationObject
+    if (linkedIssue.issueType.name == "Backend development sub-task") {
+        if (linkedIssue.status.name != "Released") {
+            allSubTasksReleased = false
+        }
+    }
+}
+
+// Проверяем входящие линки
+issueLinkManager.getInwardLinks(builtIssue.id).each { link ->
+    def linkedIssue = link.sourceObject
+    if (linkedIssue.issueType.name == "Backend development sub-task") {
+        if (linkedIssue.status.name != "Released") {
+            allSubTasksReleased = false
+        }
+    }
+}
+
+IssueService issueService = ComponentAccessor.getIssueService()
+def issueInputParameters = issueService.newIssueInputParameters() // Новый экземпляр для IssueInputParameters
+
+if (allSubTasksReleased && builtIssue != null) {
+    def transitionId = 81  
+    issueInputParameters.with {
+        setComment("Automated transition via script")
+        setSkipScreenCheck(true)  
+    }
+
+    def transitionValidationResult = issueService.validateTransition(user, builtIssue.id, transitionId, issueInputParameters)
+    
+    if (transitionValidationResult.isValid()) {
+        def transitionResult = issueService.transition(user, transitionValidationResult)
+        
+        if (!transitionResult.isValid()) {
+            throw new InvalidInputException("Failed to transition the 'Built' issue to 'Released' status: ${transitionResult.errorCollection}")
+        } else {
+            log.info("Successfully transitioned the 'Built' issue to 'Released'.")
+        }
+    } else {
+        
+        def errorMessages = transitionValidationResult.getErrorCollection().getErrorMessages()
+        log.error("Validation failed: ${errorMessages.join(', ')}")
+        throw new InvalidInputException("Validation failed: ${errorMessages.join(', ')}")
+    }
+}
+
+return allSubTasksReleased
