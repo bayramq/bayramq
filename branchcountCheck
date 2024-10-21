@@ -1,0 +1,34 @@
+import com.atlassian.jira.component.ComponentAccessor
+import groovy.json.JsonSlurper
+import com.opensymphony.workflow.InvalidInputException
+
+//def issueKey = "TEST-289"
+
+def apiUrl = "{{URL}}/rest/gitplugin/1.0/issues/branches?key=${issue}"
+
+def bearerToken = "test"
+
+def connection = new URL(apiUrl).openConnection()
+connection.setRequestProperty("Authorization", "Bearer ${bearerToken}")
+connection.setRequestProperty("Content-Type", "application/json")
+connection.setRequestMethod("GET")
+connection.connect()
+
+def responseCode = connection.responseCode
+
+if (responseCode != 200) {
+    throw new InvalidInputException("Failed to connect to the Git Integration API: HTTP ${responseCode}")
+}
+
+def json = new JsonSlurper().parse(connection.inputStream)
+connection.disconnect()
+
+def branches = json.branches
+def branchCount = branches.size()
+
+if (branchCount < 3) {
+    log.error("Количество бранчей меньше 3: ${branchCount}")
+   throw new InvalidInputException("Issue should have 3 linked bracnhes")     
+} else {
+    log.info("Количество бранчей: ${branchCount}")
+}
