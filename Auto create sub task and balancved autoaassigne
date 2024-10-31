@@ -1,0 +1,421 @@
+package Main
+
+
+import com.atlassian.jira.component.ComponentAccessor
+import com.atlassian.crowd.embedded.api.Group
+import com.atlassian.jira.util.ImportUtils
+import com.atlassian.jira.security.groups.GroupManager
+import com.atlassian.jira.issue.index.IssueIndexingService
+import com.atlassian.jira.event.type.EventDispatchOption
+import com.atlassian.jira.issue.IssueManager
+import com.atlassian.jira.config.IssueTypeManager
+import com.atlassian.jira.project.ProjectManager
+import com.atlassian.jira.user.util.UserManager
+import com.atlassian.jira.issue.CustomFieldManager
+import com.atlassian.jira.config.SubTaskManager
+import com.atlassian.jira.issue.IssueFactory
+import com.atlassian.jira.user.ApplicationUser
+import com.atlassian.jira.issue.MutableIssue
+import com.atlassian.jira.issue.link.IssueLinkManager
+import com.atlassian.jira.issue.Issue
+import com.atlassian.jira.issue.fields.CustomField
+import org.apache.log4j.Level
+import org.apache.log4j.Logger
+
+/*
+Description
+Create *Access sub-tasks for different systems according to Uzum Bank Access field
+JSM-1733
+*/
+
+//MutableIssue issue = ComponentAccessor.getIssueManager().getIssueObject("UB-2547") //debug
+
+Class_CreateUBSystemsAccessSubtask script = new Class_CreateUBSystemsAccessSubtask()
+script.run(issue)
+
+public class Class_CreateUBSystemsAccessSubtask {
+
+    Logger log = Logger.getLogger(this.class.name)
+    IssueManager issueManager = ComponentAccessor.getIssueManager()
+    GroupManager groupManager = ComponentAccessor.getGroupManager()
+    IssueTypeManager issueTypeManager = ComponentAccessor.getComponent(IssueTypeManager.class)
+    IssueFactory issueFactory = ComponentAccessor.getIssueFactory()
+    ProjectManager projectManager = ComponentAccessor.getProjectManager()
+    UserManager userManager = ComponentAccessor.getUserManager()
+    IssueLinkManager issueLinkManager = ComponentAccessor.issueLinkManager
+    CustomFieldManager customFieldManager = ComponentAccessor.getCustomFieldManager()
+    ApplicationUser sysUser = userManager.getUserByName("jirabot")
+    SubTaskManager subTaskManager = ComponentAccessor.getSubTaskManager()
+    String targetProjectKey = "UB"
+
+    Group jsmIUBAccess1 = groupManager.getGroup("jsm-ub-access-group-1")
+    Group jsmIUBAccess2 = groupManager.getGroup("jsm-ub-access-group-2")
+    Group jsmIUBAccess3 = groupManager.getGroup("jsm-ub-access-group-3")
+    Group jsmIUBAccess4 = groupManager.getGroup("jsm-ub-access-group-4")
+    Group jsmIUBAccess5 = groupManager.getGroup("jsm-ub-access-group-5")
+    Group jsmIUBAccess6 = groupManager.getGroup("jsm-ub-access-group-6")
+    Group jsmIUBAccess7 = groupManager.getGroup("jsm-ub-access-group-7")
+    Group jsmInfosec = groupManager.getGroup("jsm-infosec-ub-group-1")
+    Group jsmIUBAccess9 = groupManager.getGroup("jsm-ub-access-group-9")
+    Group jsmZup = groupManager.getGroup("jsm-1c-uzum-bank-zup")
+    Group docFlow = groupManager.getGroup("jsm-1c-uzum-bank-docflow")
+    Group jsmIUBAccess10 = groupManager.getGroup("jsm-ub-access-group-10")
+    Group jsmIfosecUB1 = groupManager.getGroup("jsm-infosec-ub-group-1")
+
+    public void run(MutableIssue issue) {
+
+        log.setLevel(Level.DEBUG)
+        long ScriptStartTime = System.currentTimeMillis()
+        log.debug("Script for ${issue.key} start.")
+
+        CustomField user = customFieldManager.getCustomFieldObjectsByName("User").iterator().next()
+        CustomField userEmail = customFieldManager.getCustomFieldObjectsByName("User E-mail").iterator().next()
+        CustomField uzBankDom = customFieldManager.getCustomFieldObjectsByName("Uzum Bank Domain").iterator().next()
+        CustomField uzBankDep = customFieldManager.getCustomFieldObjectsByName("Uzum Bank Department").iterator().next()
+        CustomField userRole = customFieldManager.getCustomFieldObjectsByName("Uzum Bank User Role").iterator().next()
+        CustomField groupAccess = customFieldManager.getCustomFieldObjectsByName("Group Access").iterator().next()
+        CustomField groupWatcher = customFieldManager.getCustomFieldObjectsByName("Group Watcher").iterator().next()
+        CustomField entity = customFieldManager.getCustomFieldObjectsByName("Entity").iterator().next()
+        CustomField uzumBankAccess = customFieldManager.getCustomFieldObjectsByName("Uzum Bank Access").iterator().next()
+        CustomField userPhone = customFieldManager.getCustomFieldObjectsByName("User Phone Number").iterator().next()
+        CustomField projectName = customFieldManager.getCustomFieldObjectsByName("Project Name").iterator().next()
+        CustomField sysName = customFieldManager.getCustomFieldObjectsByName("System Name").iterator().next()
+        CustomField hostname = customFieldManager.getCustomFieldObjectsByName("Hostname").iterator().next()
+        CustomField port = customFieldManager.getCustomFieldObjectsByName("Port").iterator().next()
+        CustomField oneC = customFieldManager.getCustomFieldObjectsByName("1C Products").iterator().next()
+
+        long blocksId = 10003
+
+        MutableIssue parentIssue = issue as MutableIssue
+        log.debug("Parent issue for ${issue}: ${parentIssue}")
+
+        String uzumBankAccessValue = issue.getCustomFieldValue(uzumBankAccess)
+        log.debug("${uzumBankAccessValue}")
+        String oneCValue = issue.getCustomFieldValue(oneC)
+        ApplicationUser userValue = parentIssue.getCustomFieldValue(user) as ApplicationUser
+        String sysNameValue = issue.getCustomFieldValue(sysName)
+
+        def zupString = ["ЗУП"]
+        def docFlowString = ["Документооборот"]
+        def userString = ["1C (пользовательский доступ)"]
+        def dbString = ["1C (доступ к базам данных)"]
+        def sshString = ["1C (доступ по SSH/RDP)"]
+        def twoOptions = ["1C (пользовательский доступ)", "1C (доступ к базам данных)"]
+
+        def optionsManager = ComponentAccessor.getOptionsManager()
+        def oneCConfig = oneC.getRelevantConfig(issue)
+        def uzConfig = uzumBankAccess.getRelevantConfig(issue)
+
+        def oneCoptions = optionsManager.getOptions(oneCConfig)
+        def uzOptions = optionsManager.getOptions(uzConfig)
+
+        def cUser = uzOptions.findAll { it.value in userString }
+        def cDB = uzOptions.findAll { it.value in dbString }
+        def cSSH = uzOptions.findAll { it.value in sshString }
+        def twoOp = uzOptions.findAll { it.value in twoOptions }
+
+        def zup = oneCoptions.findAll { it.value in zupString }
+        def dc = oneCoptions.findAll { it.value in docFlowString }
+        
+        if (uzumBankAccessValue.contains("1C (доступ по SSH)")) {
+            MutableIssue newTask = issueFactory.getIssue()
+            newTask.setIssueTypeId(issueTypeManager.getIssueTypes().find { it.name == '*Access' }.id)
+            newTask.setParentId(parentIssue.getId())
+            newTask.setProjectObject(projectManager.getProjectByCurrentKey(targetProjectKey))
+            newTask.setReporter(issue.assignee)
+            newTask.setCustomFieldValue(groupAccess, issue.getCustomFieldValue(groupAccess))
+            newTask.setCustomFieldValue(groupWatcher, issue.getCustomFieldValue(groupWatcher))
+            newTask.setCustomFieldValue(user, parentIssue.getCustomFieldValue(user))
+            newTask.setCustomFieldValue(uzBankDom, parentIssue.getCustomFieldValue(uzBankDom))
+            newTask.setCustomFieldValue(uzBankDep, parentIssue.getCustomFieldValue(uzBankDep))
+            newTask.setCustomFieldValue(userEmail, parentIssue.getCustomFieldValue(userEmail))
+            newTask.setCustomFieldValue(entity, parentIssue.getCustomFieldValue(entity))
+            newTask.setCustomFieldValue(userRole, parentIssue.getCustomFieldValue(userRole))
+            newTask.setCustomFieldValue(userPhone, parentIssue.getCustomFieldValue(userPhone))
+            newTask.setCustomFieldValue(uzumBankAccess, cSSH)
+            newTask.setSummary("Выдать доступ в 1C по SSH ${userValue.displayName}")
+            newTask.setSecurityLevelId(parentIssue.securityLevelId)
+            newTask.setPriority(parentIssue.priority)
+            newTask.setDueDate(parentIssue.dueDate)
+            MutableIssue subTask = issueManager.createIssueObject(sysUser, newTask) as MutableIssue
+            subTaskManager.createSubTaskIssueLink(parentIssue, subTask, sysUser)
+
+            setBalancedAssigneeFromGroup(newTask, jsmIUBAccess10)
+            log.debug("For ${parentIssue.key} created sub-task 1C (доступ по SSH) with key ${subTask.key}")
+            long ScriptWorkTime = System.currentTimeMillis() - ScriptStartTime
+            log.debug("Script work time: ${ScriptWorkTime} ms.")
+        }
+
+        if ((uzumBankAccessValue.contains("1C (пользовательский доступ)") || uzumBankAccessValue.contains("1C (доступ к базам данных)")) && issue.getCustomFieldValue(oneC).size() == 1 && oneCValue.contains("ЗУП")) {
+            MutableIssue newTask1 = issueFactory.getIssue()
+            newTask1.setIssueTypeId(issueTypeManager.getIssueTypes().find { it.name == '*Access' }.id)
+            newTask1.setParentId(parentIssue.getId())
+            newTask1.setProjectObject(projectManager.getProjectByCurrentKey(targetProjectKey))
+            newTask1.setReporter(issue.assignee)
+            newTask1.setCustomFieldValue(groupAccess, issue.getCustomFieldValue(groupAccess))
+            newTask1.setCustomFieldValue(groupWatcher, issue.getCustomFieldValue(groupWatcher))
+            newTask1.setCustomFieldValue(user, parentIssue.getCustomFieldValue(user))
+            newTask1.setCustomFieldValue(uzBankDom, parentIssue.getCustomFieldValue(uzBankDom))
+            newTask1.setCustomFieldValue(uzBankDep, parentIssue.getCustomFieldValue(uzBankDep))
+            newTask1.setCustomFieldValue(userEmail, parentIssue.getCustomFieldValue(userEmail))
+            newTask1.setCustomFieldValue(entity, parentIssue.getCustomFieldValue(entity))
+            newTask1.setCustomFieldValue(userRole, parentIssue.getCustomFieldValue(userRole))
+            newTask1.setCustomFieldValue(userPhone, parentIssue.getCustomFieldValue(userPhone))
+            if (uzumBankAccessValue.contains("1C (пользовательский доступ)") && uzumBankAccessValue.contains("1C (доступ к базам данных)")) {
+                newTask1.setCustomFieldValue(uzumBankAccess, twoOp)
+            } else if (uzumBankAccessValue.contains("1C (пользовательский доступ)") && !uzumBankAccessValue.contains("1C (доступ к базам данных)")) {
+                newTask1.setCustomFieldValue(uzumBankAccess, cUser)
+            } else if (!uzumBankAccessValue.contains("1C (пользовательский доступ)") && uzumBankAccessValue.contains("1C (доступ к базам данных)")) {
+                newTask1.setCustomFieldValue(uzumBankAccess, cDB)
+            }
+
+            newTask1.setCustomFieldValue(oneC, zup)
+            newTask1.setSummary("Выдать доступ в 1C ЗУП ${userValue.displayName}")
+            newTask1.setSecurityLevelId(parentIssue.securityLevelId)
+            newTask1.setPriority(parentIssue.priority)
+            newTask1.setDueDate(parentIssue.dueDate)
+            MutableIssue subTask1 = issueManager.createIssueObject(sysUser, newTask1) as MutableIssue
+            subTaskManager.createSubTaskIssueLink(parentIssue, subTask1, sysUser)
+            setBalancedAssigneeFromGroup(newTask1, jsmZup)
+            log.debug("For ${parentIssue.key} created sub-task 1C (ЗУП) with key ${subTask1.key}")
+            long ScriptWorkTime = System.currentTimeMillis() - ScriptStartTime
+            log.debug("Script work time: ${ScriptWorkTime} ms.")
+
+
+            ///////////////
+
+
+            MutableIssue newTask2 = issueFactory.getIssue()
+            newTask2.setIssueTypeId(issueTypeManager.getIssueTypes().find { it.name == '*Access' }.id)
+            newTask2.setParentId(parentIssue.getId())
+            newTask2.setProjectObject(projectManager.getProjectByCurrentKey(targetProjectKey))
+            newTask2.setReporter(issue.assignee)
+            newTask2.setCustomFieldValue(groupAccess, issue.getCustomFieldValue(groupAccess))
+            newTask2.setCustomFieldValue(groupWatcher, issue.getCustomFieldValue(groupWatcher))
+            newTask2.setCustomFieldValue(user, parentIssue.getCustomFieldValue(user))
+            newTask2.setCustomFieldValue(uzBankDom, parentIssue.getCustomFieldValue(uzBankDom))
+            newTask2.setCustomFieldValue(uzBankDep, parentIssue.getCustomFieldValue(uzBankDep))
+            newTask2.setCustomFieldValue(userEmail, parentIssue.getCustomFieldValue(userEmail))
+            newTask2.setCustomFieldValue(entity, parentIssue.getCustomFieldValue(entity))
+            newTask2.setCustomFieldValue(userRole, parentIssue.getCustomFieldValue(userRole))
+            newTask2.setCustomFieldValue(userPhone, parentIssue.getCustomFieldValue(userPhone))
+            newTask2.setCustomFieldValue(uzumBankAccess, parentIssue.getCustomFieldValue(uzumBankAccess))
+            newTask2.setCustomFieldValue(oneC, zup)
+            newTask2.setSummary("Установить 1С и добавить базы ${userValue.displayName}")
+            newTask2.setSecurityLevelId(parentIssue.securityLevelId)
+            newTask2.setPriority(parentIssue.priority)
+            newTask2.setDueDate(parentIssue.dueDate)
+            MutableIssue subTask2 = issueManager.createIssueObject(sysUser, newTask1) as MutableIssue
+            subTaskManager.createSubTaskIssueLink(parentIssue, subTask1, sysUser)
+            setBalancedAssigneeFromGroup(newTask1, jsmZup)
+            log.debug("For ${parentIssue.key} created sub-task 1C (ЗУП) with key ${subTask1.key}")
+            //long ScriptWorkTime = System.currentTimeMillis() - ScriptStartTime
+            log.debug("Script work time: ${ScriptWorkTime} ms.")
+        }
+
+        if ((uzumBankAccessValue.contains("1C (пользовательский доступ)") || uzumBankAccessValue.contains("1C (доступ к базам данных)")) && issue.getCustomFieldValue(oneC).size() == 1 && oneCValue.contains("Документооборот")) {
+            MutableIssue newTask1 = issueFactory.getIssue()
+            newTask1.setIssueTypeId(issueTypeManager.getIssueTypes().find { it.name == '*Access' }.id)
+            newTask1.setParentId(parentIssue.getId())
+            newTask1.setProjectObject(projectManager.getProjectByCurrentKey(targetProjectKey))
+            newTask1.setReporter(issue.assignee)
+            newTask1.setCustomFieldValue(groupAccess, issue.getCustomFieldValue(groupAccess))
+            newTask1.setCustomFieldValue(groupWatcher, issue.getCustomFieldValue(groupWatcher))
+            newTask1.setCustomFieldValue(user, parentIssue.getCustomFieldValue(user))
+            newTask1.setCustomFieldValue(uzBankDom, parentIssue.getCustomFieldValue(uzBankDom))
+            newTask1.setCustomFieldValue(uzBankDep, parentIssue.getCustomFieldValue(uzBankDep))
+            newTask1.setCustomFieldValue(userEmail, parentIssue.getCustomFieldValue(userEmail))
+            newTask1.setCustomFieldValue(entity, parentIssue.getCustomFieldValue(entity))
+            newTask1.setCustomFieldValue(userRole, parentIssue.getCustomFieldValue(userRole))
+            newTask1.setCustomFieldValue(userPhone, parentIssue.getCustomFieldValue(userPhone))
+            if (uzumBankAccessValue.contains("1C (пользовательский доступ)") && uzumBankAccessValue.contains("1C (доступ к базам данных)")) {
+                newTask1.setCustomFieldValue(uzumBankAccess, twoOp)
+            } else if (uzumBankAccessValue.contains("1C (пользовательский доступ)") && !uzumBankAccessValue.contains("1C (доступ к базам данных)")) {
+                newTask1.setCustomFieldValue(uzumBankAccess, cUser)
+            } else if (!uzumBankAccessValue.contains("1C (пользовательский доступ)") && uzumBankAccessValue.contains("1C (доступ к базам данных)")) {
+                newTask1.setCustomFieldValue(uzumBankAccess, cDB)
+            }
+            newTask1.setCustomFieldValue(oneC, dc)
+            newTask1.setSummary("Выдать доступ в 1C Документооборот ${userValue.displayName}")
+            newTask1.setSecurityLevelId(parentIssue.securityLevelId)
+            newTask1.setPriority(parentIssue.priority)
+            newTask1.setDueDate(parentIssue.dueDate)
+            MutableIssue subTask1 = issueManager.createIssueObject(sysUser, newTask1) as MutableIssue
+            subTaskManager.createSubTaskIssueLink(parentIssue, subTask1, sysUser)
+            setBalancedAssigneeFromGroup(newTask1, docFlow)
+            log.debug("For ${parentIssue.key} created sub-task 1C (Документооборот) with key ${subTask1.key}")
+            long ScriptWorkTime = System.currentTimeMillis() - ScriptStartTime
+            log.debug("Script work time: ${ScriptWorkTime} ms.")
+        }
+
+        if ((uzumBankAccessValue.contains("1C (пользовательский доступ)") || uzumBankAccessValue.contains("1C (доступ к базам данных)")) && issue.getCustomFieldValue(oneC).size() == 2 && oneCValue.contains("Документооборот") && oneCValue.contains("ЗУП")) {
+            log.info("1C Документооборот и ЗУП")
+            MutableIssue newTask1 = issueFactory.getIssue()
+            newTask1.setIssueTypeId(issueTypeManager.getIssueTypes().find { it.name == '*Access' }.id)
+            newTask1.setParentId(parentIssue.getId())
+            newTask1.setProjectObject(projectManager.getProjectByCurrentKey(targetProjectKey))
+            newTask1.setReporter(issue.assignee)
+            newTask1.setCustomFieldValue(groupAccess, issue.getCustomFieldValue(groupAccess))
+            newTask1.setCustomFieldValue(groupWatcher, issue.getCustomFieldValue(groupWatcher))
+            newTask1.setCustomFieldValue(user, parentIssue.getCustomFieldValue(user))
+            newTask1.setCustomFieldValue(uzBankDom, parentIssue.getCustomFieldValue(uzBankDom))
+            newTask1.setCustomFieldValue(uzBankDep, parentIssue.getCustomFieldValue(uzBankDep))
+            newTask1.setCustomFieldValue(userEmail, parentIssue.getCustomFieldValue(userEmail))
+            newTask1.setCustomFieldValue(entity, parentIssue.getCustomFieldValue(entity))
+            newTask1.setCustomFieldValue(userRole, parentIssue.getCustomFieldValue(userRole))
+            newTask1.setCustomFieldValue(userPhone, parentIssue.getCustomFieldValue(userPhone))
+            if (uzumBankAccessValue.contains("1C (пользовательский доступ)") && uzumBankAccessValue.contains("1C (доступ к базам данных)")) {
+                newTask1.setCustomFieldValue(uzumBankAccess, twoOp)
+            } else if (uzumBankAccessValue.contains("1C (пользовательский доступ)") && !uzumBankAccessValue.contains("1C (доступ к базам данных)")) {
+                newTask1.setCustomFieldValue(uzumBankAccess, cUser)
+            } else if (!uzumBankAccessValue.contains("1C (пользовательский доступ)") && uzumBankAccessValue.contains("1C (доступ к базам данных)")) {
+                newTask1.setCustomFieldValue(uzumBankAccess, cDB)
+            }
+            newTask1.setCustomFieldValue(oneC, zup)
+            newTask1.setSummary("Выдать доступ в 1C ЗУП ${userValue.displayName}")
+            newTask1.setSecurityLevelId(parentIssue.securityLevelId)
+            newTask1.setPriority(parentIssue.priority)
+            newTask1.setDueDate(parentIssue.dueDate)
+            MutableIssue subTask1 = issueManager.createIssueObject(sysUser, newTask1) as MutableIssue
+            subTaskManager.createSubTaskIssueLink(parentIssue, subTask1, sysUser)
+            setBalancedAssigneeFromGroup(newTask1, jsmZup)
+            log.debug("For ${parentIssue.key} created sub-task 1C (ЗУП) with key ${subTask1.key}")
+            long ScriptWorkTime = System.currentTimeMillis() - ScriptStartTime
+            log.debug("Script work time: ${ScriptWorkTime} ms.")
+
+            // Создание второго сабтаска с другими значениями
+            MutableIssue newTask2 = issueFactory.getIssue()
+            newTask2.setIssueTypeId(issueTypeManager.getIssueTypes().find { it.name == '*Access' }.id)
+            newTask2.setParentId(parentIssue.getId())
+            newTask2.setProjectObject(projectManager.getProjectByCurrentKey(targetProjectKey))
+            newTask2.setReporter(issue.assignee)
+            newTask2.setCustomFieldValue(groupAccess, issue.getCustomFieldValue(groupAccess))
+            newTask2.setCustomFieldValue(groupWatcher, issue.getCustomFieldValue(groupWatcher))
+            newTask2.setCustomFieldValue(user, parentIssue.getCustomFieldValue(user))
+            newTask2.setCustomFieldValue(uzBankDom, parentIssue.getCustomFieldValue(uzBankDom))
+            newTask2.setCustomFieldValue(uzBankDep, parentIssue.getCustomFieldValue(uzBankDep))
+            newTask2.setCustomFieldValue(userEmail, parentIssue.getCustomFieldValue(userEmail))
+            newTask2.setCustomFieldValue(entity, parentIssue.getCustomFieldValue(entity))
+            newTask2.setCustomFieldValue(userRole, parentIssue.getCustomFieldValue(userRole))
+            newTask2.setCustomFieldValue(userPhone, parentIssue.getCustomFieldValue(userPhone))
+            if (uzumBankAccessValue.contains("1C (пользовательский доступ)") && uzumBankAccessValue.contains("1C (доступ к базам данных)")) {
+                newTask2.setCustomFieldValue(uzumBankAccess, twoOp)
+            } else if (uzumBankAccessValue.contains("1C (пользовательский доступ)") && !uzumBankAccessValue.contains("1C (доступ к базам данных)")) {
+                newTask2.setCustomFieldValue(uzumBankAccess, cUser)
+            } else if (!uzumBankAccessValue.contains("1C (пользовательский доступ)") && uzumBankAccessValue.contains("1C (доступ к базам данных)")) {
+                newTask2.setCustomFieldValue(uzumBankAccess, cDB)
+            }
+            newTask2.setCustomFieldValue(oneC, dc)
+            newTask2.setSummary("Выдать доступ в 1C Документооборот ${userValue.displayName}")
+            newTask2.setSecurityLevelId(parentIssue.securityLevelId)
+            newTask2.setPriority(parentIssue.priority)
+            newTask2.setDueDate(parentIssue.dueDate)
+            MutableIssue subTask2 = issueManager.createIssueObject(sysUser, newTask2) as MutableIssue
+            subTaskManager.createSubTaskIssueLink(parentIssue, subTask2, sysUser)
+            setBalancedAssigneeFromGroup(newTask2, docFlow)
+            log.debug("For ${parentIssue.key} created sub-task 1C (Документооборот) with key ${subTask2.key}")
+            //long ScriptWorkTime = System.currentTimeMillis() - ScriptStartTime
+            log.debug("Script work time: ${ScriptWorkTime} ms.")
+        }
+
+        //  маппинг для других групп
+        def accessMapping = [
+    "ActiveMQ (Admin)"   : jsmIUBAccess5,
+    "ActiveMQ (Test)"    : jsmIUBAccess5,
+    "Asgardia"           : jsmIUBAccess9,
+    "B2 (Preprod)"       : jsmIUBAccess3,
+    "B2 (Test)"          : jsmIUBAccess3,
+    "Elma-Test-DB"       : jsmIUBAccess4,
+    "Elma-Web 120-25"    : jsmIUBAccess4,
+    "Elma-Web 120-53"    : jsmIUBAccess4,
+    "Grafana"            : jsmIUBAccess5,
+    "iFOBS (Prod)"       : jsmIUBAccess3,
+    "iFOBS (Test)"       : jsmIUBAccess3,
+    "Other"              : jsmIUBAccess2,
+    "Sentry"             : jsmIUBAccess5,
+    "TeamCity"           : jsmIUBAccess5,
+    "topup (Prod)"       : jsmIUBAccess3,
+    "topup (Preprod)"    : jsmIUBAccess3,
+    "topup (Test)"       : jsmIUBAccess3,
+    "UzumBank VPN"       : jsmIUBAccess2,
+    "Zabbix"             : jsmIUBAccess7,
+    "UzumID Backoffice"  : jsmIfosecUB1
+]
+
+
+        def createSubTaskClosure = { String summary, Object groupToAssign ->
+            MutableIssue newTask = issueFactory.getIssue()
+            newTask.setIssueTypeId(issueTypeManager.getIssueTypes().find { it.name == '*Access' }.id)
+            newTask.setParentId(parentIssue.getId())
+            newTask.setProjectObject(projectManager.getProjectByCurrentKey(targetProjectKey))
+            newTask.setReporter(issue.assignee)
+            newTask.setCustomFieldValue(groupAccess, issue.getCustomFieldValue(groupAccess))
+            newTask.setCustomFieldValue(groupWatcher, issue.getCustomFieldValue(groupWatcher))
+            newTask.setCustomFieldValue(user, parentIssue.getCustomFieldValue(user))
+            newTask.setCustomFieldValue(uzBankDom, parentIssue.getCustomFieldValue(uzBankDom))
+            newTask.setCustomFieldValue(uzBankDep, parentIssue.getCustomFieldValue(uzBankDep))
+            newTask.setCustomFieldValue(userEmail, parentIssue.getCustomFieldValue(userEmail))
+            newTask.setCustomFieldValue(entity, parentIssue.getCustomFieldValue(entity))
+            newTask.setCustomFieldValue(userRole, parentIssue.getCustomFieldValue(userRole))
+            newTask.setCustomFieldValue(userPhone, parentIssue.getCustomFieldValue(userPhone))
+            newTask.setSummary(summary)
+            newTask.setSecurityLevelId(parentIssue.securityLevelId)
+            newTask.setPriority(parentIssue.priority)
+            newTask.setDueDate(parentIssue.dueDate)
+
+            MutableIssue subTask = issueManager.createIssueObject(sysUser, newTask) as MutableIssue
+            subTaskManager.createSubTaskIssueLink(parentIssue, subTask, sysUser)
+            setBalancedAssigneeFromGroup(newTask, groupToAssign)
+
+            log.debug("For ${parentIssue.key} created sub-task with summary: ${summary} and key ${subTask.key}")
+            long scriptWorkTime = System.currentTimeMillis() - ScriptStartTime
+            log.debug("Script work time: ${scriptWorkTime} ms.")
+        }
+
+        accessMapping.each { key, value ->
+            if (uzumBankAccessValue.toString().contains(key)) {
+                createSubTaskClosure("Выдать доступ в ${key} ${userValue.displayName}", value)
+            }
+        }
+    }
+
+    void setBalancedAssigneeFromGroup(MutableIssue issue, Group assigneeGroup) {
+        Collection<ApplicationUser> assigneeGroupUsers = groupManager.getUsersInGroup(assigneeGroup) 
+        log.debug("Users in group: ${assigneeGroupUsers}")
+
+        if (assigneeGroupUsers.size() == 1) {
+            log.debug("Only 1 member in group: ${assigneeGroup.name} - set it to assignee")
+            issue.setAssignee(assigneeGroupUsers[0])                                             
+            issueManager.updateIssue(sysUser, issue, EventDispatchOption.DO_NOT_DISPATCH, false)
+            reindexIssue(issue)
+        } else {
+            log.debug("In group: ${assigneeGroup.name} greater than 1 member...find least busy group member")
+            long minAssignedIssues = 999
+            ApplicationUser assignee
+
+            assigneeGroupUsers.each { 
+                String query = """assignee = ${it.name} AND statusCategory != Done """ 
+                long issues = Issues.count(query)
+
+                if (issues < minAssignedIssues) { 
+                    minAssignedIssues = issues 
+                    log.debug("Minimum assigned issues size: ${minAssignedIssues}")
+                    assignee = it
+                    log.debug("Assignee: ${assignee}")
+                }
+            }
+            issue.setAssignee(assignee)                                                          
+            issueManager.updateIssue(sysUser, issue, EventDispatchOption.DO_NOT_DISPATCH, false)
+            reindexIssue(issue)
+        }
+    }
+
+    void reindexIssue(MutableIssue issue) {
+        boolean wasIndexing = ImportUtils.isIndexIssues()
+        ImportUtils.setIndexIssues(true)
+        MutableIssue freshIssue = issueManager.getIssueObject(issue.key)
+        ComponentAccessor.getComponent(IssueIndexingService.class).reIndex(freshIssue)
+        ImportUtils.setIndexIssues(wasIndexing)
+    }
+
+} 
