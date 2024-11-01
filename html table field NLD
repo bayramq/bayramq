@@ -1,0 +1,328 @@
+import com.atlassian.jira.component.ComponentAccessor
+import groovy.xml.MarkupBuilder
+import com.atlassian.jira.component.ComponentAccessor
+import com.jirahelpers.InsightObjectsUtils
+import org.apache.log4j.*
+import org.apache.commons.lang.StringUtils
+    
+
+def log = Logger.getLogger("com.onresolve.scriptrunner.runner.ScriptRunnerImpl");
+
+def issueManager = ComponentAccessor.getIssueManager()
+def cfManager = ComponentAccessor.getCustomFieldManager()
+def writer = new StringWriter()
+def xml = new MarkupBuilder(writer)
+
+
+//Attitude
+
+def operational = cfManager.getCustomFieldObject(12700)
+def risk = cfManager.getCustomFieldObject(12603)
+def compliance = cfManager.getCustomFieldObject(12701)
+def legal = cfManager.getCustomFieldObject(12605)
+def underwriting = cfManager.getCustomFieldObject(22705) //kad
+def pkmad = cfManager.getCustomFieldObject(20612) //pkmad
+def strategy = cfManager.getCustomFieldObject(12606)
+def control = cfManager.getCustomFieldObject(12604)
+def itrisk = cfManager.getCustomFieldObject(14500)
+def finance = cfManager.getCustomFieldObject(14603)
+def fraud = cfManager.getCustomFieldObject(14808)
+def retail = cfManager.getCustomFieldObject(17021)
+
+//Assignee
+
+def assigneeOperational = cfManager.getCustomFieldObject(13503)
+def assigneeRisk = cfManager.getCustomFieldObject(13501)
+def assigneeCompliance = cfManager.getCustomFieldObject(13500)
+def assigneeLegal = cfManager.getCustomFieldObject(13502)
+def assigneeUnderwriting = cfManager.getCustomFieldObject(22707) //kad
+def assigneePkmad = cfManager.getCustomFieldObject(20610) //pkmad
+def assigneeStrategy = cfManager.getCustomFieldObject(13505)
+def assigneeControl = cfManager.getCustomFieldObject(13504)
+def assigneeItrisk = cfManager.getCustomFieldObject(15900)
+def assigneeFinance = cfManager.getCustomFieldObject(14602)
+def assigneeFraud = cfManager.getCustomFieldObject(14807)
+def assigneeRetail = cfManager.getCustomFieldObject(17020)
+
+
+//To String Attitude
+String operationalStr = (issue.getCustomFieldValue(operational)==null) ? "": issue.getCustomFieldValue(operational)[0].toString()                                                                        
+String riskStr = (issue.getCustomFieldValue(risk)==null) ? "":issue.getCustomFieldValue(risk)[0].toString()
+String complianceStr = (issue.getCustomFieldValue(compliance)==null) ? "": issue.getCustomFieldValue(compliance)[0].toString()
+String legalStr = (issue.getCustomFieldValue(legal)==null) ? "": issue.getCustomFieldValue(legal)[0].toString()
+String underwritingStr = (issue.getCustomFieldValue(underwriting)==null) ? "": issue.getCustomFieldValue(underwriting)[0].toString()
+String pkmadStr = (issue.getCustomFieldValue(pkmad)==null) ? "": issue.getCustomFieldValue(pkmad)[0].toString()
+String strategyStr = (issue.getCustomFieldValue(strategy)==null) ? "": issue.getCustomFieldValue(strategy)[0].toString()
+String controlStr = (issue.getCustomFieldValue(control)==null) ? "": issue.getCustomFieldValue(control)[0].toString()
+String itriskStr = (issue.getCustomFieldValue(itrisk)==null) ? "": issue.getCustomFieldValue(itrisk)[0].toString()
+String financeStr = (issue.getCustomFieldValue(finance)==null) ? "": issue.getCustomFieldValue(finance)[0].toString()
+String fraudStr = (issue.getCustomFieldValue(fraud)==null) ? "": issue.getCustomFieldValue(fraud)[0].toString()
+String retailStr = (issue.getCustomFieldValue(retail)==null) ? "": issue.getCustomFieldValue(retail)[0].toString()
+
+
+def operationalStrTd = (operationalStr=="") ? operationalStr: operationalStr.substring(0, operationalStr.indexOf("("))
+def riskStrTd = (riskStr=="") ? riskStr: riskStr.substring(0, riskStr.indexOf("("))
+def itriskStrTd = (itriskStr=="") ? itriskStr: itriskStr.substring(0, itriskStr.indexOf("("))
+def complianceStrTd = (complianceStr=="") ? complianceStr: complianceStr.substring(0, complianceStr.indexOf("("))
+def legalStrTd = (legalStr=="") ? legalStr: legalStr.substring(0, legalStr.indexOf("("))
+def underwritingStrTd = (underwritingStr=="") ? underwritingStr: underwritingStr.substring(0, underwritingStr.indexOf("("))
+def pkmadStrTd = (pkmadStr=="") ? pkmadStr: pkmadStr.substring(0, pkmadStr.indexOf("("))
+def strategyStrTd = (strategyStr=="") ? strategyStr: strategyStr.substring(0, strategyStr.indexOf("("))
+def controlStrTd = (controlStr=="") ? controlStr: controlStr.substring(0, controlStr.indexOf("("))
+def financeStrTd = (financeStr=="") ? financeStr: financeStr.substring(0, financeStr.indexOf("("))
+def fraudStrTd = (fraudStr=="") ? fraudStr: fraudStr.substring(0, fraudStr.indexOf("("))
+def retailStrTd = (retailStr=="") ? retailStr: retailStr.substring(0, retailStr.indexOf("("))
+
+//Time in Status 
+
+def complianceTime = cfManager.getCustomFieldObject(17005)
+def riskTime = cfManager.getCustomFieldObject(17011)
+def financeTime = cfManager.getCustomFieldObject(17017)
+def fraudTime = cfManager.getCustomFieldObject(17018)
+def itriskTime = cfManager.getCustomFieldObject(17012)
+def controlTime = cfManager.getCustomFieldObject(17016)
+def kadTime = cfManager.getCustomFieldObject(17009)
+def legalTime = cfManager.getCustomFieldObject(17013)
+def operationalTime = cfManager.getCustomFieldObject(17010)
+def retailTime = cfManager.getCustomFieldObject(17019)
+def strategyTime = cfManager.getCustomFieldObject(17015)
+//def underwritingTime = cfManager.getCustomFieldObject(17009) //kad
+//def pkmadTime = cfManager.getCustomFieldObject(17014) //pkmad
+
+
+
+ArrayList assigneeOperationalArr = issue.getCustomFieldValue(assigneeOperational) as ArrayList
+        ArrayList assigneeOperationalUserName = []
+        if (assigneeOperationalArr!=null)
+		{
+	     	assigneeOperationalArr.each {
+            def myAttrValue = it.displayName
+            assigneeOperationalUserName.add(myAttrValue)
+			}
+		}
+		else assigneeOperationalUserName.add("");
+
+ArrayList assigneeRiskArr = issue.getCustomFieldValue(assigneeRisk) as ArrayList
+        ArrayList assigneeRiskUserName = []
+        if (assigneeRiskArr!=null)
+		{
+	     	assigneeRiskArr.each {
+            def myAttrValue = it.displayName
+            assigneeRiskUserName.add(myAttrValue)
+			}
+		}
+		else assigneeRiskUserName.add("");
+
+ArrayList assigneeComplianceArr = issue.getCustomFieldValue(assigneeCompliance) as ArrayList
+        ArrayList assigneeComplianceUserName = []
+        if (assigneeComplianceArr!=null)
+		{
+	     	assigneeComplianceArr.each {
+            def myAttrValue = it.displayName
+            assigneeComplianceUserName.add(myAttrValue)
+			}
+		}
+		else assigneeComplianceUserName.add("");
+
+ArrayList assigneeLegalArr = issue.getCustomFieldValue(assigneeLegal) as ArrayList
+        ArrayList assigneeLegalUserName = []
+        if (assigneeLegalArr!=null)
+		{
+	     	assigneeLegalArr.each {
+            def myAttrValue = it.displayName
+            assigneeLegalUserName.add(myAttrValue)
+			}
+		}
+		else assigneeLegalUserName.add("");   	
+
+ArrayList assigneeUnderwritingArr = issue.getCustomFieldValue(assigneeUnderwriting) as ArrayList
+        ArrayList assigneeUnderwritingUserName = []
+        if (assigneeUnderwritingArr!=null)
+		{
+	     	assigneeUnderwritingArr.each {
+            def myAttrValue = it.displayName
+            assigneeUnderwritingUserName.add(myAttrValue)
+			}
+		}
+		else assigneeUnderwritingUserName.add("");
+
+ArrayList assigneeStrategyArr = issue.getCustomFieldValue(assigneeStrategy) as ArrayList
+        ArrayList assigneeStrategyUserName = []
+        if (assigneeStrategyArr!=null)
+		{
+	     	assigneeStrategyArr.each {
+            def myAttrValue = it.displayName
+            assigneeStrategyUserName.add(myAttrValue)
+			}
+		}
+		else assigneeStrategyUserName.add("");
+
+ArrayList assigneeControlArr = issue.getCustomFieldValue(assigneeControl) as ArrayList
+        ArrayList assigneeControlUserName = []
+        if (assigneeControlArr!=null)
+		{
+	     	assigneeControlArr.each {
+            def myAttrValue = it.displayName
+            assigneeControlUserName.add(myAttrValue)
+			}
+		}
+		else assigneeControlUserName.add("");
+		
+ArrayList assigneeItriskArr = issue.getCustomFieldValue(assigneeItrisk) as ArrayList
+        ArrayList assigneeItriskUserName = []
+        if (assigneeItriskArr!=null)
+		{
+	     	assigneeItriskArr.each {
+            def myAttrValue = it.displayName
+            assigneeItriskUserName.add(myAttrValue)
+			}
+		}
+		else assigneeItriskUserName.add("");
+
+ArrayList assigneeFinanceArr = issue.getCustomFieldValue(assigneeFinance) as ArrayList
+        ArrayList assigneeFinanceUserName = []
+        if (assigneeFinanceArr!=null)
+		{
+	     	assigneeFinanceArr.each {
+            def myAttrValue = it.displayName
+            assigneeFinanceUserName.add(myAttrValue)
+			}
+		}
+		else assigneeFinanceUserName.add("");
+
+ArrayList assigneeFraudArr = issue.getCustomFieldValue(assigneeFraud) as ArrayList
+        ArrayList assigneeFraudUserName = []
+        if (assigneeFraudArr!=null)
+		{
+	     	assigneeFraudArr.each {
+            def myAttrValue = it.displayName
+            assigneeFraudUserName.add(myAttrValue)
+			}
+		}
+		else assigneeFraudUserName.add("");
+
+ArrayList assigneeRetailArr = issue.getCustomFieldValue(assigneeRetail) as ArrayList
+        ArrayList assigneeRetailUserName = []
+        if (assigneeRetailArr!=null)
+		{
+	     	assigneeRetailArr.each {
+            def myAttrValue = it.displayName
+            assigneeRetailUserName.add(myAttrValue)
+			}
+		}
+		else assigneeRetailUserName.add("");
+
+ArrayList assigneePkmadArr = issue.getCustomFieldValue(assigneePkmad) as ArrayList
+        ArrayList assigneePkmadUserName = []
+        if (assigneePkmadArr!=null)
+		{
+	     	assigneePkmadArr.each {
+            def myAttrValue = it.displayName
+            assigneePkmadUserName.add(myAttrValue)
+			}
+		}
+		else assigneePkmadUserName.add("");
+
+
+xml.style(type: "text/css",
+	'''
+	#scriptField, #scriptField *{
+    border: 2px solid white;
+	border-collapse: collapse;
+    font-size: 14px;
+    font-family: sans-serif;
+    box-shadow: 0 0 5px rgba(0, 0, 0, 0.15);
+    text-align: left;
+    padding: 5px;
+    
+	}
+    th{
+    	background-color: #009879;
+    	color: #ffffff;
+    }
+    tr:nth-child(odd){background-color: #f2f2f2;}
+    tr:hover {background-color: #ddd;}
+''')
+
+
+
+xml.table(id: "scriptField") {
+	tr {
+		th("Defense team/s")
+		th("Status")
+        th("Assignee")
+        th("Time in Status")
+	}
+	tr {
+        td("Operational Risk")
+		td(operationalStrTd)
+		td(StringUtils.join(assigneeOperationalUserName, ", "))
+        td(issue.getCustomFieldValue(operationalTime))
+	}
+    tr {
+		td("Credit Risk")
+		td(riskStrTd)
+        td(StringUtils.join(assigneeRiskUserName, ", "))
+        td(issue.getCustomFieldValue(riskTime))
+	}
+    tr {
+		td("IT Risk")
+		td(itriskStrTd)
+        td(StringUtils.join(assigneeItriskUserName, ", "))
+        td(issue.getCustomFieldValue(itriskTime))
+	}
+    tr {
+		td("Compliance")
+		td(complianceStrTd)
+        td(StringUtils.join(assigneeComplianceUserName, ", "))
+        td(issue.getCustomFieldValue(complianceTime))
+	}
+    tr {
+		td("Legal")
+		td(legalStrTd)
+        td(StringUtils.join(assigneeLegalUserName, ", "))
+        td(issue.getCustomFieldValue(legalTime))
+	}
+    tr {
+		td("KAD")
+		td(underwritingStrTd)
+        td(StringUtils.join(assigneeUnderwritingUserName, ", "))
+        td(issue.getCustomFieldValue(kadTime))
+	}
+    tr {
+		td("Strategy and Finance")
+		td(strategyStrTd)
+        td(StringUtils.join(assigneeStrategyUserName, ", "))
+        td(issue.getCustomFieldValue(strategyTime))
+	}
+    tr {
+		td("Internal Control")
+		td(controlStrTd)
+        td(StringUtils.join(assigneeControlUserName, ", "))
+        td(issue.getCustomFieldValue(controlTime))
+	}
+    tr {
+		td("Finance reporting and accounting")
+		td(financeStrTd)
+        td(StringUtils.join(assigneeFinanceUserName, ", "))
+        td(issue.getCustomFieldValue(financeTime))
+	}
+    tr {
+		td("Fraud")
+		td(fraudStrTd)
+        td(StringUtils.join(assigneeFraudUserName, ", "))
+        td(issue.getCustomFieldValue(fraudTime))
+	}
+    tr {
+		td("Retail")
+		td(retailStrTd)
+        td(StringUtils.join(assigneeRetailUserName, ", "))
+        td(issue.getCustomFieldValue(retailTime))
+	}
+	
+	
+}
+
+
+
+return (writer.toString())
