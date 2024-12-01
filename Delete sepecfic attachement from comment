@@ -1,0 +1,44 @@
+import com.atlassian.jira.component.ComponentAccessor
+import org.apache.commons.io.FilenameUtils
+
+
+def issue = event.issue
+if (!issue) {
+    return
+}
+
+
+def commentManager = ComponentAccessor.getCommentManager()
+
+def comments = issue.getComments()
+
+
+log.debug("Найдено комментариев: ${comments.size()}")
+
+def lastComment = comments.max { it.getCreated() }
+
+
+final List<String> TARGET_EXTENSIONS = ['jpg', 'jpeg', 'png', 'gif', 'bmp', 'pdf', 'txt', 'doc', 'docx', 'rtf', 'xls', 'xlsx', 'csv']
+
+
+def extractFileExtensions = { commentBody ->
+    commentBody.findAll(/[\p{L}\p{N}_\-\.]+\.(jpg|jpeg|png|gif|bmp|pdf|docx?|xlsx?|csv|txt|zip)/).collect {
+        FilenameUtils.getExtension(it)
+    }
+}
+
+
+def fileExtensions = extractFileExtensions(lastComment.body)
+def containsTargetExtensions = fileExtensions.any { it in TARGET_EXTENSIONS }
+
+
+if (containsTargetExtensions) {
+    try {
+        commentManager.delete(lastComment)
+        return "комментарий удалён : ${lastComment.body}"
+    } catch (Exception e) {
+        return "не удалось удалить комментарий. ${e.message}"
+    }
+} else {
+    return "удаление пропущено."
+}
