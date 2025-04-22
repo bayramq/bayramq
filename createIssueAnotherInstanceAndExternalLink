@@ -1,0 +1,370 @@
+
+import org.apache.http.client.methods.HttpPost
+import org.apache.http.client.methods.HttpGet
+import com.atlassian.jira.user.ApplicationUser
+import com.atlassian.jira.component.ComponentAccessor
+import groovy.json.JsonBuilder
+import groovy.json.JsonSlurper
+import com.atlassian.jira.issue.Issue
+import org.apache.http.impl.client.CloseableHttpClient
+import org.apache.http.impl.client.HttpClients
+import org.apache.http.util.EntityUtils
+import org.apache.http.entity.ContentType
+import org.apache.http.entity.mime.MultipartEntityBuilder
+import org.apache.http.client.methods.*
+import com.atlassian.jira.issue.priority.Priority
+
+
+def customFieldManager = ComponentAccessor.getCustomFieldManager()
+def issueManager = ComponentAccessor.getIssueManager()
+//def issue = issueManager.getIssueByCurrentKey("HELP-35650")
+def marketTeamField = customFieldManager.getCustomFieldObjectByName("Uzum Market Team")
+def marketTeamValue = issue.getCustomFieldValue(marketTeamField) ?: []
+def marketTeamWithoutKey = marketTeamValue ? marketTeamValue[0].toString().replaceAll(/\s*\(.*\)$/, "").trim() : ""
+
+def summary = issue.getSummary()
+def projectKey
+def uzumMarketAreaList = issue.getCustomFieldValue(customFieldManager.getCustomFieldObjectByName("Uzum Market Area")) ?: []
+def uzumMarketArea = uzumMarketAreaList ? uzumMarketAreaList[0].toString().replaceAll(/\s*\(.*\)$/, "").trim() : ""
+def issueImpact = (issue.getCustomFieldValue(customFieldManager.getCustomFieldObjectByName("Issue Impact")) ?: 0).toInteger()
+def issueFrequency = issue.getCustomFieldValue(customFieldManager.getCustomFieldObjectByName("Issue Frequency")) ?: ""
+def accessEnvironment = issue.getCustomFieldValue(customFieldManager.getCustomFieldObjectByName("Access Environment")) ?: ""
+def issueInfo = issue.getCustomFieldValue(customFieldManager.getCustomFieldObjectByName("Issue Info")) ?: ""
+def issueAffect = issue.getCustomFieldValue(customFieldManager.getCustomFieldObjectByName("Issue Affect")) ?: ""
+def app = issue.getCustomFieldValue(customFieldManager.getCustomFieldObjectByName("App")) ?: ""
+def appVersion = issue.getCustomFieldValue(customFieldManager.getCustomFieldObjectByName("App Version")) ?: ""
+def browser = issue.getCustomFieldValue(customFieldManager.getCustomFieldObjectByName("Browser")) ?: ""
+def reproduceSteps = issue.getCustomFieldValue(customFieldManager.getCustomFieldObjectByName("Reproduce Steps")) ?: ""
+def actualResult = issue.getCustomFieldValue(customFieldManager.getCustomFieldObjectByName("Actual Result")) ?: ""
+def expectedResult = issue.getCustomFieldValue(customFieldManager.getCustomFieldObjectByName("Expected Result")) ?: ""
+def previousSteps = issue.getCustomFieldValue(customFieldManager.getCustomFieldObjectByName("Previous Steps")) ?: ""
+def uzumMarketProcessList = issue.getCustomFieldValue(customFieldManager.getCustomFieldObjectByName("Uzum Market Process")) ?: ""
+def uzumMarketProcess = uzumMarketProcessList ? uzumMarketProcessList[0].toString().replaceAll(/\s*\(.*\)$/, "").trim() : ""
+def uzumMarketProcessInfo = issue.getCustomFieldValue(customFieldManager.getCustomFieldObjectByName("Uzum Market Process Info")) ?: ""
+def assigneeNameField = customFieldManager.getCustomFieldObjectByName("Assignee Name")
+ApplicationUser assigneeName = issue.getCustomFieldValue(assigneeNameField)
+
+def assigneeUsername = assigneeName?.getUsername()
+
+// добавляя поля в дескриипшн только если они не пустые
+def description = new StringBuilder()
+
+description.append("*Что случилось:*\n${summary}\n\n")
+
+if (accessEnvironment) description.append("*Где случилось:*\n${accessEnvironment}\n\n")
+if (uzumMarketArea) description.append("*Раздел:*\n${uzumMarketArea}\n\n")
+if (uzumMarketProcess || uzumMarketProcessInfo) description.append("*Процесс:*\n${uzumMarketProcess}${uzumMarketProcessInfo}\n\n")
+if (issueImpact) description.append("*Массовость проблемы:*\n${issueImpact}\n\n")
+if (issueFrequency) description.append("*Частота воспроизведения:*\n${issueFrequency}\n\n")
+if (issueInfo) description.append("*Данные от аккаунта:*\n${issueInfo}\n\n")
+if (issueAffect) description.append("*Воспроизводится у:*\n${issueAffect}\n\n")
+if (app) description.append("*Приложение:*\n${app}\n\n")
+if (appVersion) description.append("*Версия приложения:*\n${appVersion}\n\n")
+if (browser) description.append("*Браузер:*\n${browser}\n\n")
+if (reproduceSteps) description.append("*Шаги воспроизведения:*\n${reproduceSteps}\n\n")
+if (actualResult) description.append("*Фактический результат:*\n${actualResult}\n\n")
+if (expectedResult) description.append("*Ожидаемый результат:*\n${expectedResult}\n\n")
+if (previousSteps) description.append("*Как решали проблему:*\n${previousSteps}\n\n")
+
+
+def uzumMarketTeamForJira                   // Переменная для заполнения поля Team в Jira
+def contextInJira                           // Переменная для заполнения поля Context в Jira
+switch (marketTeamValue.toString()) {
+    case "[Activation (HRA-1293)]":
+        projectKey = "SXAT"
+        break
+    case "[FBS (HRA-1308)]":
+    projectKey = "FBS"
+    break
+    case "[Supply (HRA-1329)]":
+        projectKey = "FBO"
+        break
+    case "[Sellers Growth (HRA-1327)]":
+        projectKey = "SGT"
+        break
+    case "[Service (HRA-1328)]":
+        projectKey = "STPE"
+        break
+    case "[Fulfilment (HRA-2713)]":
+        projectKey = "WMSA"
+        contextInJira = "Другое"
+        break
+    case "[Hardware (HRA-1309)]":
+        projectKey = "WMS"
+        uzumMarketTeamForJira = "142"
+        break
+    case "[LastMile (HRA-1311)]":
+        projectKey = "WMSL"
+        break
+    case "[OSE (HRA-2714)]":
+        projectKey = "WMS"
+        uzumMarketTeamForJira = "111"
+        break
+    case "[PostPaid (HRA-1321)]":
+        projectKey = "WMS"
+        uzumMarketTeamForJira = "92"
+        break
+    case "[TMS (HRA-1333)]":
+        projectKey = "WMS"
+        uzumMarketTeamForJira = "91"
+        break
+    default:
+        log.error("Unknown Market Team: ${marketTeamValue}")
+        return
+}
+
+//Мапим Приоритеты по ID т.к. они разные в обоих инстансах
+def priorityValueJira // Переменная для Приоритетов Jira
+log.debug("Priority: ${issue.priority.name}")
+
+switch (issue.priority.name) {
+    case "Blocker":
+        priorityValueJira = "1"
+        break
+    case "High":
+        priorityValueJira = "2"
+        break
+    case "Medium":
+        priorityValueJira = "3"
+        break
+    case "Low":
+        priorityValueJira = "4"
+        break
+    case "Minor":
+        priorityValueJira = "5"
+        break
+    default:
+        log.debug("Unknown Priority: ${issue.priority.name}")
+        return
+}
+
+
+// креды для jira
+def username = "jsm-bot" 
+def apiToken = "Barcelona2020!@" 
+
+// Получаем базовый URL текущей Jira
+def applicationProperties = ComponentAccessor.getApplicationProperties()
+def jsmBaseUrl = applicationProperties.getString("jira.baseurl")
+def jiraBaseUrl // Переменная для динамичного URL Jira
+if (jsmBaseUrl == "https://jsm.uzum.com") {
+    jiraBaseUrl = "https://jira.uzum.com"
+    log.debug("Текущий URL JSM: ${jsmBaseUrl}. URL Jira: ${jiraBaseUrl}")
+} else {
+    jiraBaseUrl= "https://dev-jira.uzum.com"
+    log.debug("Текущий URL JSM: ${jsmBaseUrl}. URL Jira: ${jiraBaseUrl}")
+}
+
+def issueData = [
+    fields: [
+        project: [ key: projectKey ],
+        summary: summary,
+        issuetype: [ name: "Research" ],
+        priority: [ id: priorityValueJira ],
+        description: description.toString() 
+    ]
+]
+// Заполняем поле Team в JSON, только если uzumMarketTeamForJira не пустое
+if (uzumMarketTeamForJira) {
+    issueData.fields.customfield_10100 = uzumMarketTeamForJira
+}
+// Заполняем поле Context в JSON, только если contextInJira не пустое
+if (contextInJira) {
+    issueData.fields.customfield_13500 = [value: contextInJira]
+}
+
+def jsonData = new JsonBuilder(issueData).toPrettyString()
+
+
+
+def url = "${jiraBaseUrl}/rest/api/2/issue"
+def conn = new URL(url).openConnection()
+conn.setRequestMethod("POST")
+conn.setRequestProperty("Authorization", "Basic " + "${username}:${apiToken}".bytes.encodeBase64().toString())
+conn.setRequestProperty("Content-Type", "application/json")
+conn.setDoOutput(true)
+
+def writer = new OutputStreamWriter(conn.outputStream)
+writer.write(jsonData)
+writer.flush()
+writer.close()
+
+def responseCode = conn.responseCode
+def createdIssueKey
+
+if (responseCode == 201) {
+    def jsonResponse = new JsonSlurper().parseText(conn.inputStream.text)
+    createdIssueKey = jsonResponse.key
+    log.info("Issue ${createdIssueKey} successfully created in ${projectKey}")
+    
+    // Создаем ссылку на внешнюю задачу
+    def remoteLinkUrl = ComponentAccessor.getApplicationProperties().getString("jira.baseurl") + "/rest/api/2/issue/${issue.key}/remotelink"
+    def externalLinkData = [
+        object: [
+            url: "${jiraBaseUrl}/browse/${createdIssueKey}",
+            title: "[${createdIssueKey}] ${summary}" 
+        ]
+    ]
+
+    def externalLinkJson = new JsonBuilder(externalLinkData).toPrettyString()
+    
+    def linkConn = new URL(remoteLinkUrl).openConnection()
+    linkConn.setRequestMethod("POST")
+    linkConn.setRequestProperty("Authorization", "Basic " + "${username}:${apiToken}".bytes.encodeBase64().toString())
+    linkConn.setRequestProperty("Content-Type", "application/json")
+    linkConn.setDoOutput(true)
+
+    def linkWriter = new OutputStreamWriter(linkConn.outputStream)
+    linkWriter.write(externalLinkJson)
+    linkWriter.flush()
+    linkWriter.close()
+
+    def linkResponseCode = linkConn.responseCode
+    if (linkResponseCode == 201 || linkResponseCode == 200) {
+        log.info("External link successfully added to issue ${issue.key}")
+    } else {
+        def linkErrorResponse = linkConn.errorStream?.text
+        log.error("Failed to add external link: ${linkErrorResponse}")
+    }
+
+    // изменение репортера созданной задачи
+    def updateReporterUrl = "${jiraBaseUrl}/rest/api/2/issue/${createdIssueKey}"
+    def updateReporterData = [
+        fields: [
+            reporter: [ name: assigneeUsername ] // Указываем репортера
+        ]
+    ]
+    
+    def updateReporterJson = new JsonBuilder(updateReporterData).toPrettyString()
+    
+    def updateReporterConn = new URL(updateReporterUrl).openConnection()
+    updateReporterConn.setRequestMethod("PUT")
+    updateReporterConn.setRequestProperty("Authorization", "Basic " + "${username}:${apiToken}".bytes.encodeBase64().toString())
+    updateReporterConn.setRequestProperty("Content-Type", "application/json")
+    updateReporterConn.setDoOutput(true)
+
+    def updateReporterWriter = new OutputStreamWriter(updateReporterConn.outputStream)
+    updateReporterWriter.write(updateReporterJson)
+    updateReporterWriter.flush()
+    updateReporterWriter.close()
+
+    def updateReporterResponseCode = updateReporterConn.responseCode
+    if (updateReporterResponseCode == 204) {
+        log.info("Reporter successfully updated to  for issue ${createdIssueKey}")
+    } else {
+        def updateReporterErrorResponse = updateReporterConn.errorStream?.text
+        log.error("Failed to update reporter: ${updateReporterErrorResponse}")
+    }
+    // Создаем ссылку из созданной задачи в Jira на задачу в JSM
+    def reverseLinkUrl = "${jiraBaseUrl}/rest/api/2/issue/${createdIssueKey}/remotelink"
+    def reverseLinkData = [
+        object: [
+            url: "${ComponentAccessor.getApplicationProperties().getString('jira.baseurl')}/browse/${issue.key}",
+            title: "[${issue.key}] ${summary}"
+        ]
+    ]
+
+    def reverseLinkJson = new JsonBuilder(reverseLinkData).toPrettyString()
+
+    def reverseLinkConn = new URL(reverseLinkUrl).openConnection()
+    reverseLinkConn.setRequestMethod("POST")
+    reverseLinkConn.setRequestProperty("Authorization", "Basic " + "${username}:${apiToken}".bytes.encodeBase64().toString())
+    reverseLinkConn.setRequestProperty("Content-Type", "application/json")
+    reverseLinkConn.setDoOutput(true)
+
+    def reverseLinkWriter = new OutputStreamWriter(reverseLinkConn.outputStream)
+    reverseLinkWriter.write(reverseLinkJson)
+    reverseLinkWriter.flush()
+    reverseLinkWriter.close()
+
+    def reverseLinkResponseCode = reverseLinkConn.responseCode
+    if (reverseLinkResponseCode == 201 || reverseLinkResponseCode == 200) {
+        log.info("Reverse link successfully added from Jira issue ${createdIssueKey} to JSM issue ${issue.key}")
+    } else {
+        def reverseLinkErrorResponse = reverseLinkConn.errorStream?.text
+        log.error("Failed to add reverse link: ${reverseLinkErrorResponse}")
+    }
+
+
+        
+    } else {
+        def errorResponse = conn.errorStream?.text
+        log.error("Failed to create issue: ${errorResponse}")
+    }
+
+
+
+    // ------------------------------------------ Клонируем вложения -----------------------------------------------------------------------------
+    //********************************************************************************************************************************************
+    if (createdIssueKey) {
+        transferAttachments(issue.key, createdIssueKey, username, apiToken, jiraBaseUrl, jsmBaseUrl)
+    } else {
+        log.error("Ошибка в процессе клонирования")
+    }
+    // Функция по клонированию Attachments.
+    def transferAttachments(String sourceIssueKey, String targetIssueKey, String userName, String passWord, String jiraUrl, String jsmUrl) {
+        CloseableHttpClient httpClient = HttpClients.createDefault()
+        def issueDataAtach = doGet("${jsmUrl}/rest/api/2/issue/${sourceIssueKey}?fields=attachment", userName, passWord)
+        def attachments = issueDataAtach.fields.attachment ?: []
+        // Переносим вложения (если есть)
+        attachments.each { att ->
+            // Скачиваем файлы из целевой задачи
+            def fileBytes = downloadFileAsBytes(att.content, userName, passWord)
+
+            // Импортируем файлы в клонированную задачу
+            doPostMultipart("${jiraUrl}/rest/api/2/issue/${targetIssueKey}/attachments", fileBytes, att.filename, userName, passWord)
+        }
+        httpClient.close()
+        log.debug("Исходная задача: ${sourceIssueKey}, количество вложений: ${attachments.size()}")
+    }
+
+    // Функция для GET-запроса (возвращает раскодированный JSON)
+    def doGet(String url, String userName, String passWord) {
+        def get = new HttpGet(url)
+        get.addHeader("Authorization", "Basic " + "${userName}:${passWord}".bytes.encodeBase64().toString())
+        get.addHeader("Accept", "application/json")
+        def response = HttpClients.createDefault().execute(get)
+        if (response.statusLine.statusCode >= 200 && response.statusLine.statusCode < 300) {
+            // Возвращаем распарсенный JSON
+            return new JsonSlurper().parseText(EntityUtils.toString(response.entity, "UTF-8"))
+        }
+        else {
+            log.error("Ошибка при GET ${url}. Код: ${response.statusLine.statusCode}")
+            throw new RuntimeException("GET ${url} вернул статус ${response.statusLine.statusCode}. Тело ответа: ${EntityUtils.toString(response.entity, 'UTF-8')}")
+        }
+    }
+
+    // Функция для скачивания файла по URL (GET), возвращает массив байт
+    def downloadFileAsBytes(String url, String userName, String passWord) {
+        def get = new HttpGet(url)
+        get.addHeader("Authorization", "Basic " + "${userName}:${passWord}".bytes.encodeBase64().toString())
+        get.addHeader("Accept", "*/*")
+        def response = HttpClients.createDefault().execute(get)
+        if (response.statusLine.statusCode >= 200 && response.statusLine.statusCode < 300) {
+            return EntityUtils.toByteArray(response.entity)
+        }
+        else {
+            log.error("Ошибка при скачивании файла: статус=${response.statusLine.statusCode}")
+            throw new RuntimeException("Не удалось скачать вложение из ${url}: статус=${response.statusLine.statusCode}, тело: ${EntityUtils.toString(response.entity, 'UTF-8')}")
+        }
+    }
+
+    // Функция для выполнения POST multipart (используем для вложений)
+    def doPostMultipart(String url, byte[] fileBytes, String fileName, String userName, String passWord) {
+        def post = new HttpPost(url)
+        post.addHeader("Authorization", "Basic " + "${userName}:${passWord}".bytes.encodeBase64().toString())
+        post.addHeader("X-Atlassian-Token", "no-check")
+        def builder = MultipartEntityBuilder.create()
+        def encodedFileName = "=?UTF-8?B?" + fileName.bytes.encodeBase64().toString() + "?=" // Преобразовываем имя файла в UTF-8 принудительно
+        //log.debug("Original File Name:  ${fileName}. Encoded File Name: ${encodedFileName}")
+        builder.addBinaryBody("file", fileBytes, ContentType.DEFAULT_BINARY, encodedFileName)
+        post.entity = builder.build()
+        def response = HttpClients.createDefault().execute(post)
+        if (response.statusLine.statusCode >= 200 && response.statusLine.statusCode < 300) {
+            return EntityUtils.toString(response.entity, "UTF-8")
+        }
+        else {
+            log.error("Ошибка при POST (multipart) ${url}. Код: ${response.statusLine.statusCode}")
+            throw new RuntimeException("POST(multipart) ${url} вернул статус ${response.statusLine.statusCode}. Тело ответа: ${EntityUtils.toString(response.entity, 'UTF-8')}")
+        }
+    }
